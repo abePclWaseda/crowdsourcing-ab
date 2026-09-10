@@ -60,7 +60,7 @@
             <p>URLが不正です。お仕事ページのURLを正しく入力できているか確認してください。</p>
         </div>
     </div>
-    <script src="evalset2audiofiles_ab.js?v=20260910c"></script>
+    <script src="evalset2audiofiles_ab.js?v=20260910d"></script>
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const evalSet = urlParams.get('evalset') || '';
@@ -114,7 +114,7 @@
             const wrap = document.getElementById(`wrap_${i}_${side}`);
             const cv = document.createElement('canvas');
             cv.style.width = '100%';
-            cv.style.height = '48px';
+            cv.style.height = '84px';
             cv.style.display = 'block';
             wrap.appendChild(cv);
 
@@ -130,21 +130,28 @@
                 const ctx = new (window.AudioContext || window.webkitAudioContext)();
                 const ab = await ctx.decodeAudioData(buf);
                 dur = ab.duration;
-                const ch = ab.getChannelData(0);
-                const N = 240, step = Math.floor(ch.length / N);
-                peaks = new Float32Array(N);
-                for (let k = 0; k < N; k++) {
-                    let mx = 0;
-                    for (let j = k * step; j < (k + 1) * step && j < ch.length; j++) {
-                        const v = Math.abs(ch[j]); if (v > mx) mx = v;
+                // 左=相手（人間、A/B で同一）、右=評価対象のシステム。
+                // 同じペアで左チャネルの実効値が完全に一致し、右だけがモデルごとに
+                // 変わることを実測して確認した（2026-09-10）。2 段で描き分ける。
+                const N = 240;
+                peaks = [0, 1].map(c => {
+                    const ch = ab.getChannelData(Math.min(c, ab.numberOfChannels - 1));
+                    const step = Math.floor(ch.length / N);
+                    const out = new Float32Array(N);
+                    for (let k = 0; k < N; k++) {
+                        let mx = 0;
+                        for (let j = k * step; j < (k + 1) * step && j < ch.length; j++) {
+                            const v = Math.abs(ch[j]); if (v > mx) mx = v;
+                        }
+                        out[k] = mx;
                     }
-                    peaks[k] = mx;
-                }
+                    return out;
+                });
                 ctx.close();
             } catch (e) { /* 描けなくても再生はできる */ }
 
             function draw() {
-                const w = cv.clientWidth, h = 48, dpr = window.devicePixelRatio || 1;
+                const w = cv.clientWidth, h = 84, dpr = window.devicePixelRatio || 1;
                 cv.width = w * dpr; cv.height = h * dpr;
                 const g = cv.getContext('2d');
                 g.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -159,14 +166,26 @@
                     g.moveTo(hl[1] * w, 0); g.lineTo(hl[1] * w, h);
                     g.stroke();
                 }
-                if (peaks) {
-                    g.fillStyle = color;
-                    const bw = w / peaks.length;
-                    for (let k = 0; k < peaks.length; k++) {
-                        const bh = Math.max(1, peaks[k] * (h - 6));
-                        g.fillRect(k * bw, (h - bh) / 2, Math.max(1, bw - 1), bh);
+                const LANES = [
+                    { label: '相手（人間）', col: '#8a8a8a', top: 4 },
+                    { label: 'システム',     col: color,     top: 46 }
+                ];
+                g.font = '11px sans-serif';
+                LANES.forEach((ln, c) => {
+                    const mid = ln.top + 16;
+                    g.strokeStyle = '#e0e0e0'; g.lineWidth = 1;
+                    g.beginPath(); g.moveTo(0, mid); g.lineTo(w, mid); g.stroke();
+                    if (peaks) {
+                        g.fillStyle = ln.col;
+                        const pk = peaks[c], bw = w / pk.length;
+                        for (let k = 0; k < pk.length; k++) {
+                            const bh = Math.max(1, pk[k] * 30);
+                            g.fillRect(k * bw, mid - bh / 2, Math.max(1, bw - 1), bh);
+                        }
                     }
-                }
+                    g.fillStyle = '#666';
+                    g.fillText(ln.label, 2, ln.top + 1 + 9);
+                });
                 // 再生位置
                 if (dur && !audio.paused) {
                     const x = (audio.currentTime / dur) * w;
