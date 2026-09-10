@@ -9,6 +9,16 @@
         .audio-section { border: 1px solid #ccc; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
         .pair-row { display: flex; gap: 30px; align-items: start; }
         .audio-player { flex: 1; min-width: 200px; }
+        /* 事象窓のハイライト。評定してほしい瞬間を波形上に示す。
+           A/B で同一位置・同一幅なので、どちらかを有利にすることはない。 */
+        .wave-wrap { position: relative; }
+        .wave-hl { position: absolute; top: 0; bottom: 0; pointer-events: none;
+                   background: rgba(255, 214, 0, 0.28);
+                   border-left: 2px solid rgba(230, 170, 0, 0.9);
+                   border-right: 2px solid rgba(230, 170, 0, 0.9); }
+        .hl-note { font-size: 12px; color: #7a5c00; margin: 2px 0 0; text-align: center; }
+        .hl-chip { display: inline-block; width: 12px; height: 12px; vertical-align: -2px;
+                   background: rgba(255, 214, 0, 0.55); border: 1px solid rgba(230,170,0,.9); }
         .play-button { display: block; margin: 10px auto; padding: 5px 20px; background-color: #666; color: white; border: none; border-radius: 4px; cursor: pointer; }
         .choice-row { text-align: center; margin-top: 12px; font-size: 1.0em; }
         .choice-row label { margin: 0 18px; cursor: pointer; }
@@ -30,7 +40,7 @@
                 <ul>
                     <li>話の内容そのものよりも、<b>間の取り方・相づち・発話の重なり方・話者交替のタイミング</b>など、やり取りのリズムに注目してください。</li>
                     <li>どちらも不自然に感じる場合や迷う場合も、「どちらかといえば自然な方」を必ず選んでください（引き分けはありません）。</li>
-                    <li>最初の約 10 秒は 2 つの音声で同じです。それ以降を中心に聴き比べてください。</li>
+                    <li><b>黄色で塗られた区間</b>（<span class="hl-chip"></span>）が評価の対象です。その手前は状況を掴むための助走で、2 つの音声で同じです。<b>黄色の区間での応答の仕方</b>を聴き比べてください。</li>
                 </ul>
             </p>
             <p>全ての組の評価が完了したら、ページ下部の「ダウンロード」ボタンをクリックし、出力される評価結果（拡張子が<b>.bin</b>のファイル）をお仕事ページにて提出してください。</p>
@@ -74,12 +84,12 @@
                 <div class="pair-row">
                     <div class="audio-player">
                         <h4 style="text-align:center;margin:4px 0;">音声 1</h4>
-                        <div id="waveform_${i}_a"></div>
+                        <div class="wave-wrap" id="wrap_${i}_a"><div id="waveform_${i}_a"></div></div>
                         <button class="play-button" id="btn_${i}_a">再生 / 停止</button>
                     </div>
                     <div class="audio-player">
                         <h4 style="text-align:center;margin:4px 0;">音声 2</h4>
-                        <div id="waveform_${i}_b"></div>
+                        <div class="wave-wrap" id="wrap_${i}_b"><div id="waveform_${i}_b"></div></div>
                         <button class="play-button" id="btn_${i}_b">再生 / 停止</button>
                     </div>
                 </div>
@@ -102,6 +112,16 @@
                     height: 40
                 });
                 document.getElementById(`btn_${i}_${side}`).addEventListener('click', () => ws.playPause());
+
+                // 事象窓の帯。hl を持たない旧 evalset では描かない。
+                const hl = pairs[i].hl;
+                if (hl) {
+                    const band = document.createElement('div');
+                    band.className = 'wave-hl';
+                    band.style.left = (hl[0] * 100) + '%';
+                    band.style.width = ((hl[1] - hl[0]) * 100) + '%';
+                    document.getElementById(`wrap_${i}_${side}`).appendChild(band);
+                }
             }
         }
 
