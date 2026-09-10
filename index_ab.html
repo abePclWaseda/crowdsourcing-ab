@@ -34,7 +34,7 @@
     <div id="main-content" style="display: none;">
         <div class="instruction">
             <h2>インストラクション</h2>
-            <p>以下に提示される音声ペアは、AI によって作成された 2 人の日本語対話音声です（各 7〜40 秒、ステレオ：左右がそれぞれ別の話者です）。同じ組の「音声 1」と「音声 2」は、同じ会話の続きを別々の AI が作成したものです。</p>
+            <p>以下に提示される <span id="npairs">10</span> 組の音声ペアは、AI によって作成された 2 人の日本語対話音声です（各 7〜40 秒、ステレオ：左右がそれぞれ別の話者です）。同じ組の「音声 1」と「音声 2」は、同じ会話の続きを別々の AI が作成したものです。</p>
             <p>それぞれの組について両方の音声を聴き、<b>会話のやり取りとして自然に聞こえる方</b>を 1 つ選んでください。</p>
             <p>判断のポイント：
                 <ul>
@@ -61,7 +61,7 @@
             <p>URLが不正です。お仕事ページのURLを正しく入力できているか確認してください。</p>
         </div>
     </div>
-    <script src="evalset2audiofiles_ab.js?v=20260910e"></script>
+    <script src="evalset2audiofiles_ab.js?v=20260910f"></script>
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const evalSet = urlParams.get('evalset') || '';
@@ -74,6 +74,9 @@
             document.getElementById('error-content').style.display = 'block';
         }
 
+        // 問数は evalset ごとに決まるので、教示の数字も実際の件数に合わせる
+        const np = document.getElementById('npairs');
+        if (np) np.textContent = String(pairs.length);
         const container = document.getElementById('audio-container');
         for (let i = 0; i < pairs.length; i++) {
             const section = document.createElement('div');
