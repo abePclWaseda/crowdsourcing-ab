@@ -60,9 +60,7 @@
             <p>URLが不正です。お仕事ページのURLを正しく入力できているか確認してください。</p>
         </div>
     </div>
-
-    <script src="https://unpkg.com/wavesurfer.js@7"></script>
-    <script src="evalset2audiofiles_ab.js?v=20260910b"></script>
+    <script src="evalset2audiofiles_ab.js?v=20260910c"></script>
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const evalSet = urlParams.get('evalset') || '';
@@ -102,27 +100,85 @@
             container.appendChild(section);
 
             for (const side of ['a', 'b']) {
-                const ws = WaveSurfer.create({
-                    container: `#waveform_${i}_${side}`,
-                    waveColor: side === 'a' ? '#E8854A' : '#4A85E8',
-                    progressColor: '#383351',
-                    url: pairs[i][side],
-                    splitChannels: true,
-                    barWidth: 2,
-                    height: 40
-                });
-                document.getElementById(`btn_${i}_${side}`).addEventListener('click', () => ws.playPause());
+                renderPlayer(i, side, pairs[i][side], pairs[i].hl,
+                             side === 'a' ? '#E8854A' : '#4A85E8');
+            }
+        }
 
-                // 事象窓の帯。hl を持たない旧 evalset では描かない。
-                const hl = pairs[i].hl;
+
+        // 波形は自前で描く。wavesurfer.js は この環境で ready イベントが来ず、
+        // 波形が一度も描画されていなかった（2026-09-10 に判明。8 月の A/B でも
+        // 同じ状態だったが、再生ボタンは動くので気付かれていなかった）。
+        // decodeAudioData は正常に動くので、ピークを自分で計算して canvas に描く。
+        async function renderPlayer(i, side, url, hl, color) {
+            const wrap = document.getElementById(`wrap_${i}_${side}`);
+            const cv = document.createElement('canvas');
+            cv.style.width = '100%';
+            cv.style.height = '48px';
+            cv.style.display = 'block';
+            wrap.appendChild(cv);
+
+            const audio = new Audio(url);
+            audio.preload = 'auto';
+            document.getElementById(`btn_${i}_${side}`).addEventListener('click', () => {
+                if (audio.paused) { audio.play(); } else { audio.pause(); audio.currentTime = 0; }
+            });
+
+            let peaks = null, dur = 0;
+            try {
+                const buf = await fetch(url).then(r => r.arrayBuffer());
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const ab = await ctx.decodeAudioData(buf);
+                dur = ab.duration;
+                const ch = ab.getChannelData(0);
+                const N = 240, step = Math.floor(ch.length / N);
+                peaks = new Float32Array(N);
+                for (let k = 0; k < N; k++) {
+                    let mx = 0;
+                    for (let j = k * step; j < (k + 1) * step && j < ch.length; j++) {
+                        const v = Math.abs(ch[j]); if (v > mx) mx = v;
+                    }
+                    peaks[k] = mx;
+                }
+                ctx.close();
+            } catch (e) { /* 描けなくても再生はできる */ }
+
+            function draw() {
+                const w = cv.clientWidth, h = 48, dpr = window.devicePixelRatio || 1;
+                cv.width = w * dpr; cv.height = h * dpr;
+                const g = cv.getContext('2d');
+                g.setTransform(dpr, 0, 0, dpr, 0, 0);
+                g.clearRect(0, 0, w, h);
+                // 事象窓（評定対象）
                 if (hl) {
-                    const band = document.createElement('div');
-                    band.className = 'wave-hl';
-                    band.style.left = (hl[0] * 100) + '%';
-                    band.style.width = ((hl[1] - hl[0]) * 100) + '%';
-                    document.getElementById(`wrap_${i}_${side}`).appendChild(band);
+                    g.fillStyle = 'rgba(255, 214, 0, 0.35)';
+                    g.fillRect(hl[0] * w, 0, (hl[1] - hl[0]) * w, h);
+                    g.strokeStyle = 'rgba(210, 155, 0, 0.95)'; g.lineWidth = 2;
+                    g.beginPath();
+                    g.moveTo(hl[0] * w, 0); g.lineTo(hl[0] * w, h);
+                    g.moveTo(hl[1] * w, 0); g.lineTo(hl[1] * w, h);
+                    g.stroke();
+                }
+                if (peaks) {
+                    g.fillStyle = color;
+                    const bw = w / peaks.length;
+                    for (let k = 0; k < peaks.length; k++) {
+                        const bh = Math.max(1, peaks[k] * (h - 6));
+                        g.fillRect(k * bw, (h - bh) / 2, Math.max(1, bw - 1), bh);
+                    }
+                }
+                // 再生位置
+                if (dur && !audio.paused) {
+                    const x = (audio.currentTime / dur) * w;
+                    g.strokeStyle = '#383351'; g.lineWidth = 1.5;
+                    g.beginPath(); g.moveTo(x, 0); g.lineTo(x, h); g.stroke();
                 }
             }
+            draw();
+            window.addEventListener('resize', draw);
+            (function loop() { if (!audio.paused) draw(); requestAnimationFrame(loop); })();
+            audio.addEventListener('pause', draw);
+            audio.addEventListener('ended', draw);
         }
 
         function downloadResults() {
